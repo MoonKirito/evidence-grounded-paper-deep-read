@@ -1,0 +1,7 @@
+interface:
+  display_name: "Evidence-Grounded Paper Deep Read"
+  short_description: "Deep, evidence-grounded reports from paper PDFs."
+  default_prompt: "Use $evidence-grounded-paper-deep-read to create a detailed Chinese paper deep-reading report from this PDF, covering what the authors did, why they did it, how they did it, and how they validated it."
+
+policy:
+  allow_implicit_invocation: true

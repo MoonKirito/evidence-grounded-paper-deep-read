@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+.DS_Store
+reports/
+paper-output/
+paper/
+pdffigures2/
+.tmp/
+.paperdeepread.toml
+*.log
