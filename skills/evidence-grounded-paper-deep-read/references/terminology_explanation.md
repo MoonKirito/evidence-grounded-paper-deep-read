@@ -1,71 +1,17 @@
 # Terminology And Formula Explanation
 
-Use this reference when explaining specialized concepts.
+只解释理解核心贡献和证明链必需的术语及公式，在 How 或 Experiment 首次使用处解释，不另设术语百科或公式章节。
 
-## Technical Terms
+术语用一两句说明含义及其在本方法中的作用；必要时指出常见混淆，例如训练与推理、相关性与因果性。
 
-For each important term, provide:
-
-- Plain-language definition.
-- Why it appears in this paper.
-- Where it appears in the method or experiment.
-- Common beginner misunderstanding.
-- Relationship to nearby concepts.
-
-Example format:
+公式应与原文核对，行内用 `$...$`，行间使用：
 
 ```markdown
-### Term: Contrastive Learning
-
-Plain meaning:
-
-In this paper:
-
-Why it matters:
-
-Common confusion:
-
-Related terms:
+$$
+L = L_1 + \lambda L_2
+$$
 ```
 
-## Formulas
+解释核心符号、运算直觉和该式服务的设计目标即可，避免每个式子附大表。明确哪些是论文原式、哪些是等价改写或读者推导。不能可靠提取时说明证据限制，不能补写貌似合理的公式。
 
-For each formula:
-
-```markdown
-### Equation <n>: <short name>
-
-Original formula:
-
-$$
-...
-$$
-
-Symbol-by-symbol explanation:
-
-| Symbol | Meaning | Where Defined |
-|---|---|---|
-
-Plain-language explanation:
-
-Pipeline role:
-
-Intuition:
-
-Potential confusion:
-
-Evidence:
-```
-
-If the formula cannot be extracted exactly, write `Formula not reliably extractable from PDF` and explain it from surrounding text.
-
-## Algorithms And Pseudocode
-
-For each algorithm:
-
-- State inputs.
-- State outputs.
-- Rewrite the procedure in plain language.
-- Explain non-obvious operations.
-- Connect each step to formulas or modules.
-- Explain computational or implementation implications if the paper gives them.
+实验指标就地说明衡量什么、数值方向及比较条件。计算提升时注明是百分点还是相对比例。

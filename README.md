@@ -1,273 +1,78 @@
-﻿# Evidence-Grounded Paper Deep Read
+# Evidence-Grounded Paper Deep Read
 
-[English](README.md) | [中文](README.zh-CN.md)
+English | [中文](README.zh-CN.md)
 
-Evidence-Grounded Paper Deep Read is a Codex skill and CLI workflow for turning research PDFs into detailed, evidence-grounded Markdown deep-reading reports.
+Turn one or more research PDFs into evidence-grounded Markdown reports, one report per paper. The narrative follows **What → Why → How → Experiment → Question**: contributions, motivation, technical pipeline, experimental proof and independent assessment.
 
-The project is built for readers who want more than a summary. It asks the model to explain what the authors did, why they did it, how the method works, how the experiments support the claims, and how figures, formulas, tables, metrics, and technical terms connect to the paper.
+- Extract figures/tables with **pdffigures2**, then analyze every actual image with its caption and paper context before writing.
+- Plan visual coverage globally: retain complementary method diagrams, remove redundant information, and select representative experimental evidence.
+- Explain module inputs, operations, outputs and design rationale in How, including training versus inference.
+- Use `$...$` for inline math and standalone `$$` lines for display math; explain visuals where they support the argument.
+- Support multiple providers, a separate vision model, resumable stages and report/visual-coverage validation.
 
-## Preview
+Chinese reports aim for 2800–4200 characters, including 1200–2000 in How. Complex methods may need more detail.
 
-The generated report is Markdown, so it can be read directly in a Markdown editor, committed as research notes, or sent into a document workflow such as Feishu CLI.
+## Quick start
 
-![Report preview 1](images/report1.1.png)
+Requirements: Python 3.10+, Java, a built pdffigures2 jar and an API key for a suitable text/vision model.
 
-![Report preview 2](images/report1.2.png)
-
-![Report preview 3](images/report1.3.png)
-
-## Features
-
-- Generate one Markdown deep-reading report per PDF.
-- Use a reusable Codex skill under `skills/evidence-grounded-paper-deep-read/`.
-- Extract paper text, section-like paragraph anchors, and figure/table metadata.
-- Extract cropped paper figures and tables with [allenai/pdffigures2](https://github.com/allenai/pdffigures2).
-- Generate reports with a sectioned workflow instead of one huge prompt.
-- Integrate figures into the relevant discussion instead of putting them in a separate figure appendix.
-- Validate reports for required sections, evidence markers, image references, and mixed-language heading issues.
-- Export the skill prompt for use with another model or agent.
-
-## How It Works
-
-```text
-PDF folder
-  -> text extraction
-  -> pdffigures2 figure/table extraction
-  -> paper index and figure manifest
-  -> sectioned evidence packs
-  -> MiMo OpenAI-compatible chat API
-  -> Markdown report
-  -> report validator
-```
-
-The default `sectioned` generation mode writes the report in stages:
-
-1. Metadata and one-sentence overview.
-2. What the authors did and why they did it.
-3. Method, formulas, and technical details.
-4. Experiments, baselines, metrics, and results.
-5. Innovation points, limitations, beginner background, and reproduction notes.
-6. Completeness checklist.
-
-This staged design is more robust for papers of different lengths than sending the entire paper as a single prompt.
-
-## Repository Layout
-
-```text
-.
-├─ paperdeepread/                         # Python CLI package
-│  ├─ cli.py                              # CLI commands
-│  ├─ pipeline.py                         # PDF-to-report workflow
-│  ├─ evidence_pack.py                    # Stage-specific evidence selection
-│  ├─ sectioned.py                        # Multi-stage report assembly
-│  └─ providers/mimo.py                   # Xiaomi MiMo provider
-├─ skills/
-│  └─ evidence-grounded-paper-deep-read/  # Reusable Codex skill
-│     ├─ SKILL.md
-│     ├─ agents/openai.yaml
-│     ├─ references/
-│     ├─ scripts/
-│     └─ assets/report_template.md
-├─ scripts/
-│  └─ run_pdffigures2.ps1                 # pdffigures2 helper wrapper
-├─ workflows/
-│  └─ pdffigures2.md                      # pdffigures2 setup and validation notes
-├─ images/                                # README screenshots
-├─ tests/                                 # Unit tests
-├─ .paperdeepread.example.toml            # Example CLI config
-├─ requirements.txt
-└─ pyproject.toml
-```
-
-## Requirements
-
-- Python 3.10+
-- Java runtime for `pdffigures2`
-- A built `pdffigures2.jar`
-- A Xiaomi MiMo API key for the first supported LLM provider
-
-`pdffigures2` is an external project by AllenAI. This project uses it to locate and crop figures/tables from PDF papers. See [workflows/pdffigures2.md](workflows/pdffigures2.md) for local build notes.
-
-## Install
-
-```bash
-git clone <your-repo-url>
+```powershell
+git clone https://github.com/MoonKirito/evidence-grounded-paper-deep-read.git
 cd evidence-grounded-paper-deep-read
-python -m venv .venv
-python -m pip install -r requirements.txt
 python -m pip install -e .
+python -m paperdeepread init-config --provider openai --model gpt-4.1
+$env:OPENAI_API_KEY="your-key"
 ```
 
-Activate the virtual environment before installing dependencies.
+On Linux/macOS, use `export OPENAI_API_KEY="your-key"`. Choose an actual model ID available to your account. Override the endpoint in the config when needed. Running `init-config` without arguments retains the original MiMo defaults.
 
-macOS/Linux:
-
-```bash
-source .venv/bin/activate
-```
-
-Windows PowerShell:
+Place PDFs in `paper/`, then supply your jar:
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
+python -m paperdeepread run --input paper --output reports --pdffigures2-jar /path/to/pdffigures2.jar
 ```
 
-After installation, either command form works:
+Alternatively set `jar_path` and `java_path` under `[pdffigures2]` in `.paperdeepread.toml`. See [pdffigures2 setup](docs/pdffigures2.md).
 
-```bash
-python -m paperdeepread --help
-paperdeepread --help
-```
+## Configuration and output
 
-## Build Or Prepare pdffigures2
-
-Clone or download [allenai/pdffigures2](https://github.com/allenai/pdffigures2), build its jar, and pass the jar path to the CLI.
-
-A typical local layout is:
+[Provider configuration](docs/providers.md) covers OpenAI, Claude, Gemini, DeepSeek, Qwen, Kimi, GLM, Doubao, MiniMax, Grok, MiMo, OpenRouter, SiliconFlow and custom compatible gateways. `list-providers` lists endpoint/key defaults. An optional `[vision]` section selects a separate image-reading model.
 
 ```text
-evidence-grounded-paper-deep-read/
-  pdffigures2/
-    pdffigures2.jar
+reports/<paper-name>/
+  report.md                    # Final five-part report
+  source.pdf
+  paper_index.json
+  extracted/
+    full_text.md
+    sections.json
+    figure_manifest.json       # pdffigures2 inventory
+    visual_analysis.json       # All-visual pre-reading
+    visual_plan.json           # Selection, deduplication, claim coverage
+    figures/
+  stages/                      # Resumable report stages
 ```
 
-Local notes:
+The default `sectioned` mode writes one section at a time. `one_shot` also requires visual pre-reading and a global plan. Important facts cite paper anchors; inferences are distinguished from author claims. Extraction can miss visuals, so possible misses are recorded rather than recovered through custom screenshots. Validation cannot replace scientific fact-checking.
 
-- JDK 17 worked well in testing.
-- Very new JDKs may fail with the older Scala/SBT stack used by `pdffigures2`.
-- The CLI accepts any jar path through `--pdffigures2-jar`.
+## Standalone skill and development
 
-## Configure The LLM Provider
-
-Create a config file:
-
-```bash
-python -m paperdeepread init-config
-```
-
-The default config uses Xiaomi MiMo:
-
-```toml
-[llm]
-provider = "mimo"
-base_url = "https://token-plan-cn.xiaomimimo.com/v1"
-model = "mimo-v2.5-pro"
-api_key_env = "MIMO_API_KEY"
-temperature = 0.2
-max_tokens = 24000
-timeout_seconds = 900
-stream = true
-```
-
-Set the API key in your shell.
-
-macOS/Linux:
-
-```bash
-export MIMO_API_KEY="your_key"
-```
-
-Windows PowerShell:
+The reusable [paper-reading skill](skills/evidence-grounded-paper-deep-read/SKILL.md) contains instructions, a report template and standalone helpers.
 
 ```powershell
-$env:MIMO_API_KEY="your_key"
-```
-
-## Generate Reports
-
-Create a folder for input PDFs:
-
-```text
-paper/
-  paper-1.pdf
-  paper-2.pdf
-```
-
-Run the CLI:
-
-```powershell
-python -m paperdeepread run `
-  --input paper `
-  --output reports `
-  --config .paperdeepread.toml `
-  --pdffigures2-jar .\pdffigures2\pdffigures2.jar `
-  --java-path java
-```
-
-With a local JDK 17 path on Windows:
-
-```powershell
-python -m paperdeepread run `
-  --input paper `
-  --output reports `
-  --config .paperdeepread.toml `
-  --pdffigures2-jar .\pdffigures2\pdffigures2.jar `
-  --java-path .\.tmp\tools\jdk17\jdk-17.0.19+10\bin\java.exe
-```
-
-Each paper gets a workspace like this:
-
-```text
-reports/
-  paper-slug/
-    source.pdf
-    report.md
-    paper_index.json
-    stages/
-      overview_metadata.md
-      what_why.md
-      how_formula.md
-      experiment.md
-      innovation_limits_background.md
-      checklist.md
-    extracted/
-      full_text.md
-      sections.json
-      figure_manifest.json
-      figures/
-        source-Figure1-1.png
-```
-
-## Use With Feishu CLI
-
-The final report is standard Markdown. If your research workflow uses Feishu CLI, you can pipe or upload `report.md` through your existing Feishu Markdown import process to create collaborative documents, knowledge-base pages, or reading-note archives.
-
-A common workflow is:
-
-```text
-paper PDF -> paperdeepread report.md -> Feishu CLI Markdown import/sync -> shared Feishu document
-```
-
-## Use The Skill Directly
-
-The reusable skill lives at:
-
-```text
-skills/evidence-grounded-paper-deep-read/
-```
-
-Point Codex or another compatible agent at that folder when you want an agent to use the reading protocol without the CLI.
-
-You can also export a combined prompt:
-
-```bash
 python -m paperdeepread export-skill-prompt --out skill_prompt.md
-```
-
-## Validate A Report
-
-```bash
-python skills/evidence-grounded-paper-deep-read/scripts/validate_report.py reports/paper-slug/report.md
-```
-
-The validator checks required report sections, Markdown image references, evidence markers, mixed-language headings, full-page preview references, and weak generic wording patterns.
-
-## Run Tests
-
-```bash
 python -m unittest discover -s tests -v
 ```
 
-## License
+See [development and release checks](docs/development.md). Dependencies have one source of truth in `pyproject.toml`; install `python -m pip install -e ".[fallback]"` if you need the optional pdfplumber extraction backend.
 
-MIT License. See [LICENSE](LICENSE).
+## Layout
+
+```text
+paperdeepread/    CLI, providers, evidence selection and report generation
+skills/          Standalone paper-reading skill
+docs/           Provider, pdffigures2 and development guides
+tests/          Protocol, workflow and visual-coverage tests
+```
+
+Local papers, reports, key configs, downloaded dependencies and temporary files are excluded by `.gitignore`. Licensed under [MIT](LICENSE).

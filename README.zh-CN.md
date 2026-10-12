@@ -1,273 +1,78 @@
-﻿# 证据驱动论文精读报告工具
+# Evidence-Grounded Paper Deep Read
 
-[English](README.md) | [中文](README.zh-CN.md)
+[English](README.md) | 中文
 
-Evidence-Grounded Paper Deep Read 是一个 **Codex skill + CLI 工作流**，用于把研究论文 PDF 转换成详细、证据驱动的 Markdown 精读报告。
+将一篇或多篇论文 PDF 转换为证据驱动的 Markdown 精读报告。每篇论文独立输出，按 **What → Why → How → Experiment → Question** 串起贡献、动机、技术路线、实验证明链和独立评价。
 
-这个项目不是为了生成宽泛摘要，而是让模型围绕“作者做了什么、为什么做、具体怎么做、如何验证”进行细粒度讲解，并把公式、图表、实验指标、专业术语和创新点放回论文证据中解释。
+- 写作前使用 **pdffigures2** 提取图表，再结合实际图片、图注和正文逐项分析。
+- 全局选图计划保留互补方法图、去除重复信息；实验图按核心贡献精选。
+- How 详细解释模块输入输出、内部步骤、设计理由，以及训练与推理的区别。
+- 行内公式使用 `$...$`，行间公式使用 `$$`；图表在对应段落展示讲解。
+- 支持多 provider、独立看图模型、断点续写及格式/图表覆盖验证。
 
-## 效果预览
+中文正文建议 2800–4200 字，How 建议 1200–2000 字；复杂方法按实际需要扩展。
 
-生成结果是 Markdown 文件，可以直接用 Markdown 编辑器阅读，也可以进入飞书 CLI 等文档工作流。
+## 快速开始
 
-![报告预览 1](images/report1.1.png)
+需要 Python 3.10+、Java 和已构建的 pdffigures2 jar，以及具有相应文本/视觉能力的模型 API key。
 
-![报告预览 2](images/report1.2.png)
-
-![报告预览 3](images/report1.3.png)
-
-## 功能特点
-
-- 每篇 PDF 生成一份 Markdown 精读报告。
-- 内置可复用 Codex skill：`skills/evidence-grounded-paper-deep-read/`。
-- 自动抽取正文、段落锚点、图表元数据。
-- 基于 [allenai/pdffigures2](https://github.com/allenai/pdffigures2) 从 PDF 中抽取精确裁剪的 figure/table。
-- 使用 `sectioned` 多阶段生成策略，而不是一次性把整篇论文塞给模型。
-- 把图表融入“作者做了什么、为什么做、具体怎么做、如何验证”等对应段落，而不是单独开图表附录。
-- 提供报告验证器，检查章节、图片引用、证据标记、语言混用和泛化表述。
-- 可以导出 skill prompt 给其他模型或智能体单独使用。
-
-## 工作流
-
-```text
-PDF 文件夹
-  -> 文本抽取
-  -> pdffigures2 图表抽取
-  -> 论文索引和图表 manifest
-  -> 分阶段 evidence pack
-  -> MiMo OpenAI-compatible Chat API
-  -> Markdown 精读报告
-  -> 本地验证器
-```
-
-默认 `sectioned` 生成模式会分阶段生成：
-
-1. 论文基本信息和一句话总览。
-2. 作者做了什么、为什么做。
-3. 方法、公式和关键技术细节。
-4. 实验、baseline、指标和结果。
-5. 创新点、局限性、初学者背景、复现建议。
-6. 完整性自检。
-
-这种方式比固定截断整篇论文更适合不同长度、不同结构的论文。
-
-## 项目结构
-
-```text
-.
-├─ paperdeepread/                         # Python CLI 包
-│  ├─ cli.py                              # CLI 命令
-│  ├─ pipeline.py                         # PDF 到报告的主流程
-│  ├─ evidence_pack.py                    # 分阶段证据选择
-│  ├─ sectioned.py                        # 多阶段报告组装
-│  └─ providers/mimo.py                   # 小米 MiMo provider
-├─ skills/
-│  └─ evidence-grounded-paper-deep-read/  # 可复用 Codex skill
-│     ├─ SKILL.md
-│     ├─ agents/openai.yaml
-│     ├─ references/
-│     ├─ scripts/
-│     └─ assets/report_template.md
-├─ scripts/
-│  └─ run_pdffigures2.ps1                 # pdffigures2 辅助脚本
-├─ workflows/
-│  └─ pdffigures2.md                      # pdffigures2 构建与验证说明
-├─ images/                                # README 示例图
-├─ tests/                                 # 单元测试
-├─ .paperdeepread.example.toml            # 示例配置
-├─ requirements.txt
-└─ pyproject.toml
-```
-
-## 环境要求
-
-- Python 3.10+
-- Java runtime，用于运行 `pdffigures2`
-- 已构建好的 `pdffigures2.jar`
-- 小米 MiMo API key
-
-本项目使用 AllenAI 的 [pdffigures2](https://github.com/allenai/pdffigures2) 进行论文 figure/table 抽取。构建和验证说明见 [workflows/pdffigures2.md](workflows/pdffigures2.md)。
-
-## 安装
-
-```bash
-git clone <your-repo-url>
+```powershell
+git clone https://github.com/MoonKirito/evidence-grounded-paper-deep-read.git
 cd evidence-grounded-paper-deep-read
-python -m venv .venv
-python -m pip install -r requirements.txt
 python -m pip install -e .
+python -m paperdeepread init-config --provider openai --model gpt-4.1
+$env:OPENAI_API_KEY="your-key"
 ```
 
-激活虚拟环境：
+Linux/macOS 用 `export OPENAI_API_KEY="your-key"` 设置环境变量。模型 ID 可替换为平台实际支持的模型；默认接口可在配置中覆盖。MiMo 用户可直接运行 `init-config` 使用原有默认值。
 
-macOS/Linux:
-
-```bash
-source .venv/bin/activate
-```
-
-Windows PowerShell:
+将 PDF 放入 `paper/`，并提供 jar 路径：
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
+python -m paperdeepread run --input paper --output reports --pdffigures2-jar /path/to/pdffigures2.jar
 ```
 
-安装后可以使用：
+也可在 `.paperdeepread.toml` 的 `[pdffigures2]` 中设置 `jar_path` 和 `java_path`。准备 jar 的方式见 [pdffigures2](docs/pdffigures2.md)。
 
-```bash
-python -m paperdeepread --help
-paperdeepread --help
-```
+## 配置与输出
 
-## 准备 pdffigures2
-
-克隆或下载 [allenai/pdffigures2](https://github.com/allenai/pdffigures2)，构建 jar，并在运行 CLI 时传入 jar 路径。
-
-常见本地布局：
+[Provider 配置](docs/providers.md) 包含 OpenAI、Claude、Gemini、DeepSeek、Qwen、Kimi、GLM、豆包、MiniMax、Grok、MiMo、OpenRouter、SiliconFlow 和自定义兼容网关的说明。使用 `list-providers` 查看默认地址与 key 环境变量；可通过 `[vision]` 单独设置看图模型。
 
 ```text
-evidence-grounded-paper-deep-read/
-  pdffigures2/
-    pdffigures2.jar
+reports/<paper-name>/
+  report.md                    # 最终五节报告
+  source.pdf                   # 原始论文
+  paper_index.json             # 章节与证据索引
+  extracted/
+    full_text.md
+    sections.json
+    figure_manifest.json       # pdffigures2 图表清单
+    visual_analysis.json       # 全量图表预读
+    visual_plan.json           # 选择、去重和贡献覆盖理由
+    figures/
+  stages/                      # 正文断点缓存
 ```
 
-本地测试经验：
+`sectioned` 为默认模式，逐节生成；`one_shot` 同样先完成图表分析和全局计划。重要事实有页码/章节/图表等证据定位，推断与作者结论分开。pdffigures2 可能漏提取，工作文件会记录可能的遗漏；不自行截图补图。程序验证不能代替原文事实核对。
 
-- JDK 17 可稳定构建和运行。
-- 很新的 JDK 可能和旧版 Scala/SBT 栈不兼容。
-- CLI 通过 `--pdffigures2-jar` 接收任意 jar 路径。
+## 独立 Skill 与开发
 
-## 配置大模型
-
-生成配置文件：
-
-```bash
-python -m paperdeepread init-config
-```
-
-默认 provider 是小米 MiMo：
-
-```toml
-[llm]
-provider = "mimo"
-base_url = "https://token-plan-cn.xiaomimimo.com/v1"
-model = "mimo-v2.5-pro"
-api_key_env = "MIMO_API_KEY"
-temperature = 0.2
-max_tokens = 24000
-timeout_seconds = 900
-stream = true
-```
-
-在 shell 中配置 API key。
-
-macOS/Linux:
-
-```bash
-export MIMO_API_KEY="your_key"
-```
-
-Windows PowerShell:
+可复用 skill 位于 [skills/evidence-grounded-paper-deep-read](skills/evidence-grounded-paper-deep-read/SKILL.md)，包含阅读规范、报告模板和独立脚本。也可导出组合提示词：
 
 ```powershell
-$env:MIMO_API_KEY="your_key"
-```
-
-## 生成精读报告
-
-把论文 PDF 放到输入目录：
-
-```text
-paper/
-  paper-1.pdf
-  paper-2.pdf
-```
-
-运行：
-
-```powershell
-python -m paperdeepread run `
-  --input paper `
-  --output reports `
-  --config .paperdeepread.toml `
-  --pdffigures2-jar .\pdffigures2\pdffigures2.jar `
-  --java-path java
-```
-
-如果使用本地 JDK 17：
-
-```powershell
-python -m paperdeepread run `
-  --input paper `
-  --output reports `
-  --config .paperdeepread.toml `
-  --pdffigures2-jar .\pdffigures2\pdffigures2.jar `
-  --java-path .\.tmp\tools\jdk17\jdk-17.0.19+10\bin\java.exe
-```
-
-输出结构：
-
-```text
-reports/
-  paper-slug/
-    source.pdf
-    report.md
-    paper_index.json
-    stages/
-      overview_metadata.md
-      what_why.md
-      how_formula.md
-      experiment.md
-      innovation_limits_background.md
-      checklist.md
-    extracted/
-      full_text.md
-      sections.json
-      figure_manifest.json
-      figures/
-        source-Figure1-1.png
-```
-
-## 配合飞书 CLI
-
-最终精读报告是标准 Markdown。你可以把 `report.md` 接入自己的飞书 CLI Markdown 导入/同步流程，用来生成飞书文档、知识库页面或团队阅读笔记。
-
-常见流程是：
-
-```text
-论文 PDF -> paperdeepread report.md -> 飞书 CLI Markdown 导入/同步 -> 飞书协作文档
-```
-
-## 单独复用 Skill
-
-可复用 skill 位于：
-
-```text
-skills/evidence-grounded-paper-deep-read/
-```
-
-你可以让 Codex 或其他兼容智能体直接读取这个目录，使用其中的 `SKILL.md`、`references/`、`scripts/` 和模板资源。
-
-也可以导出组合 prompt：
-
-```bash
 python -m paperdeepread export-skill-prompt --out skill_prompt.md
-```
-
-## 验证报告
-
-```bash
-python skills/evidence-grounded-paper-deep-read/scripts/validate_report.py reports/paper-slug/report.md
-```
-
-验证器会检查章节完整性、Markdown 图片引用、证据标记、结构标题语言混用、整页 preview 引用和泛化表述。
-
-## 运行测试
-
-```bash
 python -m unittest discover -s tests -v
 ```
 
-## 许可证
+开发、验证与发布检查见 [开发说明](docs/development.md)。依赖仅在 `pyproject.toml` 维护；如需备用文本提取后端，可安装 `python -m pip install -e ".[fallback]"`。
 
-MIT License. See [LICENSE](LICENSE).
+## 仓库结构
+
+```text
+paperdeepread/    CLI、provider、证据选择及报告生成
+skills/          可独立使用的论文精读 skill
+docs/           provider、pdffigures2 和开发说明
+tests/          协议、工作流及图表覆盖测试
+```
+
+本地论文、报告、key 配置、下载依赖与临时文件均由 `.gitignore` 排除。MIT 许可证见 [LICENSE](LICENSE)。

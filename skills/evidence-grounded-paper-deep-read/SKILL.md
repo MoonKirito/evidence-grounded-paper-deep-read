@@ -1,181 +1,50 @@
-﻿---
+---
 name: evidence-grounded-paper-deep-read
-description: Generate detailed, evidence-grounded Markdown deep-reading reports from research paper PDFs. Use when Codex needs to analyze academic papers, extract figures/tables, explain formulas and technical terms for beginners, compare claims against paper evidence, or produce structured reading reports covering what the authors did, why they did it, how they did it, and how they validated it.
+description: Generate concise, evidence-grounded Markdown reports for one or more research PDFs, using a what/why/how/experiment/question narrative and analyzing all pdffigures2 figures and tables before writing.
 ---
 
 # Evidence-Grounded Paper Deep Read
 
-## Purpose
+每篇 PDF 输出一份独立的 `report.md`，用 What → Why → How → Experiment → Question 将论文串成一条论证路线。默认使用用户语言，中文正文建议 2800–4200 字，How 建议 1200–2000 字；复杂方法可适度超出，优先保留理解主张所必需的技术内容。
 
-Create a detailed Markdown deep-reading report from a research paper PDF. The report must be specific enough that a beginner can understand the paper's motivation, method, formulas, figures, experiments, and technical terms without reading the original paper first.
+## 工作流
 
-Default to the user's language for the final report. If the user does not specify a language, use the language of the request.
+1. 为每篇论文建立独立目录，保留 `source.pdf`，提取带页码和段落 ID 的正文。
+2. **先使用 pdffigures2 提取全部图和表**，保留原始元数据及 `figure_manifest.json`。不得自行截图、使用其他工具裁剪，或把整页预览作为报告插图。未提取成功的图表记录为不可用；可据图注与正文作有限分析，但不能假装已经看过图片。
+3. 建立论文索引，通读主张、动机、方法、实验与局限。核对全文中的图表引用和提取清单，记录可能漏提取的图表；无法确认的引用不能当成已提取图表。
+4. **写报告之前分析所有图和表**：查看图片，结合图注及引用正文，理解结构/坐标/行列/指标、关键观察、支持的主张和证明边界。保存 `extracted/visual_analysis.json`，逐项记录分析、证据、可读性，以及建议放入哪一节或不插入的理由。无法看图时明确说明能力限制，不能用图注冒充视觉分析。
+5. 完成全局 `extracted/visual_plan.json`：How 中技术路线与机制图去重后尽量全部展示，互补总览/局部图不视为重复；实验图按核心贡献证明链选择。逐项保存选择或省略理由、重复代表和信息覆盖，核心贡献另记录图表/文字呈现理由。然后依据 `references/report_schema.md` 和 `references/reading_protocol.md` 写五节正文。以核心贡献及其证明链为主线，图表、公式、术语在相关技术或实验处解释，不设单独的公式、创新点、背景补充或自检章节。
+6. 执行全局计划，在指定章节展示并讲解所有 include=true 图表，不因压缩篇幅再次删除；不插入 include=false 图表。How 详细解释图中的技术步骤、输入输出和设计理由；实验图阐明支持的主张与证明边界。图表不凑数量。
+7. 按 `references/quality_checklist.md` 复核，运行 `scripts/validate_report.py`；检查过程留在工作文件，不追加到报告正文。
 
-Maintain strict language consistency. Section titles, table headers, checklist labels, image captions, and explanatory prose must use the report language. Keep English only for paper titles, author names, dataset names, model names, abbreviations, code identifiers, equations, and technical terms that are normally written in English.
-
-## Required Workflow
-
-Never start by writing a polished summary. Work through these phases in order:
-
-1. Prepare a per-paper workspace.
-2. Extract text, figures, tables, captions, and formulas when possible. Prefer pdffigures2 for figure/table extraction. Use local fallback extraction and verified cropping only for visuals that pdffigures2 misses or renders incorrectly.
-3. Build a paper index that maps sections, claims, methods, formulas, figures, and experiments.
-4. Create evidence cards for all important claims and method details.
-5. Draft the report from the evidence cards.
-6. Insert figures with local relative Markdown paths.
-7. Run the quality checklist before final delivery.
-
-Use this directory layout for each paper unless the user specifies another output structure:
+## 输出约定
 
 ```text
 paper-output/
   source.pdf
+  report.md
+  paper_index.json
   extracted/
     full_text.md
     sections.json
     figure_manifest.json
+    visual_analysis.json
+    visual_plan.json
     figures/
-      figure-001.png
-      figure-002.png
-  paper_index.json
-  evidence_cards.md
-  report.md
+  stages/                     # CLI 断点续写五个正文阶段
 ```
 
-## Tools And Resources
+重要事实须有真实页码、章节、图表号、公式号或段落锚点，例如 `(Evidence: Sec. 3.2, Fig. 2)`。区分作者结论、实验观察与自己的推断；评价写明依据及可补充验证的方向。
 
-- Use `scripts/extract_pdf_text.py` to extract page-level text into Markdown and JSON.
-- Prefer the project-level pdffigures2 workflow for figure/table extraction. It should produce cropped figure/table images plus metadata containing captions, pages, and bounding boxes.
-- Use `scripts/extract_pdf_figures.py` to inspect embedded image objects and render page previews only when pdffigures2 misses a visual.
-- Use `scripts/crop_pdf_region_verified.py` as a fallback recovery tool for exact figure/table regions with safety margin and edge-tightness checks.
-- Use `scripts/build_paper_index.py` to create a paper index scaffold from extracted text and figures.
-- Use `scripts/make_report_scaffold.py` to create a report scaffold from `assets/report_template.md`.
-- Use `scripts/validate_report.py` to catch missing sections and weak report coverage.
-- Read `references/reading_protocol.md` before analyzing a paper.
-- Read `references/report_schema.md` before drafting the report.
-- Read `references/figure_analysis_protocol.md` before explaining figures and tables.
-- Read `references/terminology_explanation.md` when the paper uses specialized terms, formulas, or field-specific methods.
-- Read `references/quality_checklist.md` before claiming the report is complete.
+行内公式用 `$...$`，行间公式用独占行的 `$$` 包裹。不能用其他数学定界符、代码块或反引号代替。无法可靠提取的公式应说明限制，不凭空补写。
 
-The Python extraction scripts prefer PyMuPDF and automatically fall back to `pdfplumber` when available. If both extraction backends are unavailable, continue manually, but keep the same artifacts and report structure. Full-page previews are inspection aids only and should not be used as final report figures.
+## 工具与参考
 
-## Evidence Rules
+- CLI `python -m paperdeepread run` 完成批量处理，必须配置 pdffigures2 jar；支持多 provider（详见项目 `docs/providers.md`），可用 `[vision]` 独立设置看图模型。图表预读需要多模态能力，兼容接口使用 `image_url`，Claude/Gemini 使用原生图像格式；不支持看图时应停止并报告。
+- `scripts/extract_pdf_text.py`：正文及页码/段落锚点。
+- `scripts/build_paper_index.py`：论文索引脚手架，需要阅读后核实，不能当成自动理解结果。
+- `scripts/make_report_scaffold.py`：从 `assets/report_template.md` 建立报告目录。
+- `scripts/validate_report.py`：结构、数学定界符、图片来源/路径、方法去重与全局选图章节覆盖等本地检查。
+- 图表预读细则见 `references/figure_analysis_protocol.md`；必要术语及公式的就地解释见 `references/terminology_explanation.md`。
 
-Treat the paper as the source of truth.
-
-- Attach section names, page numbers, paragraph numbers, figure numbers, table numbers, or equation numbers to important claims whenever available.
-- Do not invent motivations, baselines, datasets, metrics, ablations, or limitations.
-- Mark uncertain items as `Not clearly stated in the paper` instead of guessing.
-- When a claim depends on interpretation, label it as an inference and explain the evidence behind it.
-- Prefer concrete details over evaluative adjectives. Replace vague phrases such as "improves performance" with the exact mechanism, metric, dataset, and result when available.
-
-## Required Report Structure
-
-The final `report.md` must use section titles in the report language. For Chinese reports, use:
-
-```markdown
-# 论文精读报告：<paper title>
-
-## 0. 一句话总览
-## 1. 论文基本信息
-## 2. 作者做了什么
-## 3. 作者为什么要做这件事
-## 4. 作者具体怎么做
-## 5. 作者如何验证
-## 6. 公式与关键技术细节
-## 7. 创新点逐条拆解
-## 8. 局限性与开放问题
-## 9. 初学者背景补充
-## 10. 复现与进一步阅读建议
-## 11. 完整性自检
-```
-
-For English reports, translate the same structure fully into English. Do not mix labels such as `WHAT`, `WHY`, `HOW`, or `EXPERIMENT` into a Chinese report heading.
-
-For each innovation point, include:
-
-- The problem it addresses.
-- The author's idea.
-- The exact implementation or algorithmic procedure.
-- The relevant formula, figure, or module if present.
-- Why the design may work.
-- How it differs from prior or baseline methods.
-- Evidence location in the paper.
-
-For each experiment, include:
-
-- Research question tested by the experiment.
-- Dataset or benchmark.
-- Metric.
-- Compared methods or baselines.
-- Setup details.
-- Main result.
-- What the result proves and what it does not prove.
-- Evidence location in the paper.
-
-## Figure Handling
-
-Save cropped figures under `extracted/figures/` or `figures/` and reference them with relative paths:
-
-```markdown
-![Figure 1: Overall framework](extracted/figures/figure-001.png)
-```
-
-Use pdffigures2 output as the first-choice visual source. Inspect its extracted images and metadata before writing. If pdffigures2 misses a figure/table or produces an incomplete crop, recover that visual with fallback page preview plus verified cropping. When cropping manually, add margin, inspect edge warnings, and recrop until the image contains all panels, labels, axes, legends, and caption elements needed for understanding.
-
-Do not create a standalone figure/table explanation section. Integrate each figure or table into the section where it is used as evidence:
-
-- Use task/problem definition figures in `作者做了什么`.
-- Use motivation or gap figures in `作者为什么要做这件事`.
-- Use architecture, algorithm, and formula figures in `作者具体怎么做`.
-- Use result tables, ablation tables, and qualitative examples in `作者如何验证`.
-
-For every major figure or table, explain naturally in the surrounding prose:
-
-- What the figure/table shows.
-- How to read each region, arrow, axis, row, or column.
-- Which claim or method step it supports.
-- What a beginner might misunderstand.
-- Whether the visual evidence is strong, incomplete, or only illustrative.
-
-Full-page previews are inspection aids, not final report figures. If pdffigures2 and fallback cropping both fail, mark the visual as an unresolved extraction limitation and do not pretend the page preview is the figure.
-
-## Formula Handling
-
-For each important formula:
-
-- Reproduce the formula if it can be extracted reliably.
-- Define every symbol.
-- Explain the computation in plain language.
-- Explain where it appears in the method pipeline.
-- Explain why the formula is needed.
-- Give a toy intuitive example when useful.
-- Mark any symbol that is not defined by the paper.
-
-## Batch Processing
-
-When processing many papers, create one output folder per paper and keep a batch index:
-
-```text
-reports/
-  batch_index.md
-  paper-001-short-title/
-    report.md
-  paper-002-short-title/
-    report.md
-```
-
-`batch_index.md` should list title, filename, status, report path, and any extraction problems.
-
-## Completion Standard
-
-A report is not complete until it passes these checks:
-
-- The task, motivation, method, and experiment sections are all substantive.
-- All stated contributions are decomposed into problem, idea, implementation, and evidence.
-- Major figures and tables are embedded or explicitly marked as unavailable.
-- Figures/tables are precise crops and are integrated into the report's argument instead of isolated in a figure-reading section.
-- Key formulas and technical terms are explained for beginners.
-- Experiments include datasets, metrics, baselines, settings, and interpretation.
-- The report distinguishes paper evidence from agent inference.
-- The completeness checklist is filled honestly.
+图表提取只使用 pdffigures2；不使用 embedded-image、page-preview 或自行裁剪补图。

@@ -1,125 +1,142 @@
-﻿#!/usr/bin/env python3
-"""Check whether a paper deep-reading report contains required sections."""
-
+#!/usr/bin/env python3
+"""Validate the five-part report, math delimiters and pdffigures2 image provenance."""
 from __future__ import annotations
 
 import argparse
+import json
+import importlib.util
 import re
 import sys
 from pathlib import Path
 
+CONCEPTS = ["what", "why", "how", "experiment", "question"]
+EVIDENCE = r"Evidence:|Inference from|证据[：:]|推断依据[：:]"
 
-ZH_REQUIRED_HEADINGS = [
-    "## 0. 一句话总览",
-    "## 1. 论文基本信息",
-    "## 2. 作者做了什么",
-    "## 3. 作者为什么要做这件事",
-    "## 4. 作者具体怎么做",
-    "## 5. 作者如何验证",
-    "## 6. 公式与关键技术细节",
-    "## 7. 创新点逐条拆解",
-    "## 8. 局限性与开放问题",
-    "## 9. 初学者背景补充",
-    "## 10. 复现与进一步阅读建议",
-    "## 11. 完整性自检",
-]
-
-EN_REQUIRED_HEADINGS = [
-    "## 0. One-Sentence Overview",
-    "## 1. Paper Metadata",
-    "## 2. What Did The Authors Do?",
-    "## 3. Why Did They Do It?",
-    "## 4. How Does The Method Work?",
-    "## 5. How Did They Validate It?",
-    "## 6. Formula And Technical Detail Walkthrough",
-    "## 7. Innovation Points",
-    "## 8. Limitations And Open Questions",
-    "## 9. Beginner Background Notes",
-    "## 10. Reproduction Notes",
-    "## 11. Completeness Checklist",
-]
-
-MIXED_LANGUAGE_HEADINGS = [
-    "## 2. WHAT",
-    "## 3. WHY",
-    "## 4. HOW",
-    "## 5. EXPERIMENT",
-    "## 6. Figure And Table Deep Reading",
-]
-
-WEAK_PATTERNS = [
-    r"\bimproves performance\b",
-    r"\bnovel framework\b",
-    r"\bproves effectiveness\b",
-    r"\buseful features\b",
-    r"\bsignificant results\b",
-    r"提升性能",
-    r"提出.*框架",
-    r"证明.*有效",
-]
+_spec = importlib.util.spec_from_file_location("visual_contract", Path(__file__).with_name("visual_contract.py"))
+_contract = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_contract)
 
 
-def heading_present(text: str, heading: str) -> bool:
-    return heading in text
+def math_problems(text: str) -> list[str]:
+    problems = []
+    if re.search(r"\\[\[\]()]", text):
+        problems.append("Use $...$ / $$ instead of LaTeX parenthesis or bracket delimiters")
+    for code in re.findall(r"```.*?```", text, re.S):
+        if re.search(r"(?<!\\)\$", code):
+            problems.append("Math must not be placed inside fenced code blocks")
+    for code in re.findall(r"(?<!`)`([^`\n]+)`(?!`)", text):
+        if re.search(r"(?<!\\)\$", code):
+            problems.append("Math must not be wrapped in inline code")
+    text = re.sub(r"```.*?```|`[^`\n]*`", "", text, flags=re.S)
+    in_display = False
+    inline_open = False
+    for line in text.splitlines():
+        if line.strip() == "$$":
+            if inline_open:
+                problems.append("Inline math crosses a display boundary")
+                inline_open = False
+            in_display = not in_display
+            continue
+        if re.search(r"(?<!\\)\$\$", line):
+            problems.append("Display $$ delimiters must each occupy their own line")
+        if not in_display:
+            inline_open = bool((int(inline_open) + len(re.findall(r"(?<!\\)\$", line))) % 2)
+            if not line.strip() and inline_open:
+                problems.append("Unclosed inline math before paragraph boundary")
+                inline_open = False
+    if in_display:
+        problems.append("Unclosed display math delimiter")
+    if inline_open:
+        problems.append("Unclosed inline math delimiter")
+    return problems
 
 
-def detect_language(text: str) -> str:
-    chinese_chars = len(re.findall(r"[\u4e00-\u9fff]", text))
-    latin_words = len(re.findall(r"\b[A-Za-z][A-Za-z-]{2,}\b", text))
-    return "zh" if chinese_chars >= latin_words else "en"
+def validate_report(report: Path) -> list[str]:
+    text = report.read_text(encoding="utf-8-sig")
+    problems = []
+    prose = re.sub(r"```.*?```", "", text, flags=re.S)
+    headings = list(re.finditer(r"^##\s+(.+)$", prose, re.M))
+    if len(headings) != 5:
+        problems.append("Expected exactly five level-2 sections: What, Why, How, Experiment, Question")
+    for index, concept in enumerate(CONCEPTS):
+        if index >= len(headings):
+            break
+        heading = headings[index]
+        if not re.match(rf"{index + 1}\.\s+{concept}\b", heading.group(1), re.I):
+            problems.append(f"Section {index + 1} must be {concept.title()} in narrative order")
+        end = headings[index + 1].start() if index + 1 < len(headings) else len(prose)
+        body = prose[heading.end():end].strip()
+        if not body:
+            problems.append(f"Empty section: {concept}")
+        if not re.search(EVIDENCE, body, re.I):
+            problems.append(f"Section lacks an evidence or inference anchor: {concept}")
+    if not re.search(r"^#\s+.+", prose, re.M):
+        problems.append("Missing report title")
+    if re.search(r"\bTODO\b|生成失败", text):
+        problems.append("Report contains unfinished placeholders")
+    problems.extend(math_problems(text))
+    # Images follow the global plan; all embedded paths must come from pdffigures2.
+    images = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", prose)
+    manifest_path = report.parent / "extracted" / "figure_manifest.json"
+    analysis_path = report.parent / "extracted" / "visual_analysis.json"
+    plan_path = report.parent / "extracted" / "visual_plan.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig")) if manifest_path.exists() else {}
+    analysis = json.loads(analysis_path.read_text(encoding="utf-8-sig")) if analysis_path.exists() else {}
+    allowed = {item.get("image") for item in manifest.get("items", []) if item.get("image")}
+    analyzed = {item.get("image") for item in analysis.get("items", []) if item.get("status") == "analyzed"}
+    if manifest_path.exists():
+        if manifest.get("source") != "pdffigures2":
+            problems.append("Figure manifest must come from pdffigures2")
+        if not analysis.get("complete"):
+            problems.append("All-visual analysis must be complete before report writing")
+        entries = analysis.get("items", [])
+        manifest_keys = {(item.get("figType"), str(item.get("name"))) for item in manifest.get("items", [])}
+        analysis_keys = {(item.get("figType"), str(item.get("name"))) for item in entries}
+        if manifest_keys != analysis_keys:
+            problems.append("Visual analysis does not cover every manifest item")
+        if any(item.get("status") not in {"analyzed", "unreadable", "unavailable"} for item in entries):
+            problems.append("Visual analysis contains unfinished entries")
+        if not plan_path.exists():
+            problems.append("Missing global visual plan; method/claim coverage was not checked")
+        else:
+            plan = json.loads(plan_path.read_text(encoding="utf-8-sig"))
+            if not plan.get("complete"):
+                problems.append("Global visual plan is incomplete")
+            problems.extend(_contract.plan_problems(plan, analysis))
+            problems.extend(_contract.coverage_problems(prose, plan))
+    seen = set()
+    for image in images:
+        image = image.strip().strip("<>")
+        path = (report.parent / image).resolve()
+        if image in seen:
+            problems.append(f"Duplicate report image: {image}")
+        seen.add(image)
+        if "preview" in image.lower():
+            problems.append(f"Page previews are not allowed: {image}")
+        if not path.is_relative_to((report.parent / "extracted" / "figures").resolve()):
+            problems.append(f"Image must be inside extracted/figures: {image}")
+        if not path.is_file():
+            problems.append(f"Image file does not exist: {image}")
+        if manifest.get("source") != "pdffigures2" or image not in allowed:
+            problems.append(f"Image is not in the pdffigures2 manifest: {image}")
+        if image not in analyzed:
+            problems.append(f"Image was not analyzed before drafting: {image}")
+    return problems
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("report", type=Path)
     args = parser.parse_args()
-
-    if not args.report.exists():
-        raise SystemExit(f"Report not found: {args.report}")
-
-    text = args.report.read_text(encoding="utf-8")
-    problems = []
-
-    language = detect_language(text)
-    required_headings = ZH_REQUIRED_HEADINGS if language == "zh" else EN_REQUIRED_HEADINGS
-
-    for heading in required_headings:
-        if not heading_present(text, heading):
-            problems.append(f"Missing required heading: {heading}")
-
-    if language == "zh":
-        for heading in MIXED_LANGUAGE_HEADINGS:
-            if heading in text:
-                problems.append(f"Mixed-language structural heading found in Chinese report: {heading}")
-
-        if "图表精读" in text or "## 6. Figure And Table Deep Reading" in text:
-            problems.append("Figures/tables must be integrated into the task, motivation, method, or experiment sections, not isolated in a standalone figure-reading section")
-
-    if "TODO" in text:
-        problems.append("Report still contains TODO markers")
-
-    evidence_hits = len(re.findall(r"\bEvidence:|\bInference from", text, flags=re.IGNORECASE))
-    if evidence_hits < 5:
-        problems.append("Too few evidence markers; expected at least 5")
-
-    image_hits = len(re.findall(r"!\[[^\]]*\]\([^)]+\)", text))
-    if image_hits == 0:
-        problems.append("No Markdown images found; explain if figure extraction failed")
-
-    preview_hits = len(re.findall(r"page-\d{3}-preview|page preview|整页预览", text, flags=re.IGNORECASE))
-    if preview_hits > 0:
-        problems.append("Report references page previews; crop precise figures/tables or explicitly mark this as an unresolved extraction limitation")
-
-    for pattern in WEAK_PATTERNS:
-        if re.search(pattern, text, flags=re.IGNORECASE):
-            problems.append(f"Weak generic wording found: {pattern}")
-
+    try:
+        problems = validate_report(args.report)
+    except (OSError, ValueError, TypeError) as exc:
+        problems = [f"Cannot validate report artifacts: {exc}"]
     if problems:
         print("Validation failed:")
         for problem in problems:
             print(f"- {problem}")
         return 1
-
     print("Validation passed")
     return 0
 

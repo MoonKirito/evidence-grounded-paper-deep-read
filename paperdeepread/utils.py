@@ -8,12 +8,27 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SKILL_DIR = REPO_ROOT / "skills" / "evidence-grounded-paper-deep-read"
+
+
+def find_skill_dir() -> Path:
+    """Locate skill resources in a checkout or a regular wheel installation."""
+    candidates = [
+        REPO_ROOT / "skills" / "evidence-grounded-paper-deep-read",
+        REPO_ROOT / "share" / "paperdeepread" / "skill",  # pip --target
+        Path(sys.prefix) / "share" / "paperdeepread" / "skill",
+    ]
+    for candidate in candidates:
+        if (candidate / "SKILL.md").is_file():
+            return candidate
+    raise RuntimeError("Bundled paper-reading skill is missing; reinstall paperdeepread.")
+
+
+SKILL_DIR = find_skill_dir()
 
 
 def slugify(value: str) -> str:
     value = value.lower()
-    value = re.sub(r"[^a-z0-9]+", "-", value)
+    value = re.sub(r"[^\w]+", "-", value, flags=re.UNICODE).replace("_", "-")
     return value.strip("-") or "paper"
 
 
@@ -28,7 +43,6 @@ def run_python_script(script: Path, args: list[str], cwd: Path = REPO_ROOT) -> s
     command = [sys.executable, str(script), *args]
     env = os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
-    env["PYTHONPYCACHEPREFIX"] = str(REPO_ROOT / ".tmp" / "pycache")
     return subprocess.run(
         command,
         cwd=cwd,

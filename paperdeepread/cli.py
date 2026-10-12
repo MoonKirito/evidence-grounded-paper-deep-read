@@ -7,6 +7,7 @@ from pathlib import Path
 from paperdeepread.config import load_config, write_default_config
 from paperdeepread.pipeline import RunOptions, run_pipeline
 from paperdeepread.prompts import build_skill_prompt
+from paperdeepread.providers.presets import PROVIDERS
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -19,6 +20,10 @@ def build_parser() -> argparse.ArgumentParser:
     init_config = subparsers.add_parser("init-config", help="Write a default CLI config file.")
     init_config.add_argument("--path", type=Path, default=Path(".paperdeepread.toml"))
     init_config.add_argument("--force", action="store_true")
+    init_config.add_argument("--provider", default="mimo", help="Provider name or alias; see list-providers.")
+    init_config.add_argument("--model", default=None, help="Model ID or deployment ID from your provider.")
+    init_config.add_argument("--base-url", default=None, help="Override the provider API root.")
+    subparsers.add_parser("list-providers", help="List provider presets, API roots and key environment variables.")
 
     run = subparsers.add_parser("run", help="Generate reports for all PDFs in a folder.")
     run.add_argument("--input", type=Path, required=True, help="Folder containing PDF files.")
@@ -43,10 +48,16 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.command == "init-config":
-            write_default_config(args.path, force=args.force)
+            write_default_config(args.path, force=args.force, provider=args.provider, model=args.model, base_url=args.base_url)
             print(f"Wrote config: {args.path}")
             print("Set your key before running:")
-            print("$env:MIMO_API_KEY=\"your_key\"")
+            config = load_config(args.path)
+            print(f'$env:{config.llm.api_key_env}="your_key"')
+            return 0
+
+        if args.command == "list-providers":
+            for name, preset in PROVIDERS.items():
+                print(f"{name:20} {preset.protocol:10} {preset.api_key_env:22} {preset.base_url or '(configure base_url)'}")
             return 0
 
         if args.command == "export-skill-prompt":

@@ -13,3 +13,24 @@ pdffigures2/
 .tmp/
 .paperdeepread.toml
 *.log
+
+# Local artifacts, credentials and dependency caches
+.local/
+.agents/
+.codex/
+.env
+.env.*
+!.env.example
+.paperdeepread.*.toml
+!.paperdeepread.example.toml
+maven/
+*.jar
+*.pdf
+*.pem
+*.key
+
+# Test/build tooling
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/

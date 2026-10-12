@@ -1,79 +1,18 @@
-﻿# Quality Checklist
+# Quality Checklist
 
-Run this checklist before final delivery.
+交付前在工作文件中检查，报告不追加完整性自检表。
 
-## Required Sections
+- 每篇论文有独立 Markdown，正文按 What/Why/How/Experiment/Question 五节顺序。
+- 贡献具体；动机指出既有方法的具体不足，并区分作者启发与推断。
+- How 足够详细，可以追踪各模块输入、内部操作、输出、衔接和设计理由；训练/推理区别与必要公式就地解释。
+- 实验按作者目标形成证明链，关键结果、基线与比较条件可定位。
+- Question 有独立评价，区分作者局限和读者判断，并指出针对性的验证方式。
+- 已在写作之前分析所有图表，漏提取及不可读项目明确记录。
+- 已完成全局 visual_plan.json；方法图去重后覆盖技术路线，省略图有完整覆盖其信息的代表，不能把总览和局部机制图简单当成重复。
+- 核心贡献分别有代表性实验图表或具体的仅文字呈现理由；补充诊断不机械升级成核心贡献，同一证明链的追加图有必要性说明；正文执行计划，没有把独立收益全压成文字，也没有接近全量堆图。
+- 插入图表来自 pdffigures2、路径存在、章节正确，图前后有具体讲解，重复内容不反复叙述。
+- 行内公式使用 $...$，行间公式使用独占行的 $$；没有代码块内公式或其他数学定界符。
+- 关键事实与数值有真实证据；推断未冒充作者结论，未捏造元数据、公式或实验结果。
+- 删除重复背景、重复创新点、图表逐项复述、术语百科和无关复现细节。
 
-- Title and metadata are filled.
-- Structural language is consistent: headings, table headers, image captions, and checklist labels match the report language.
-- The task section explains the exact work, not only the topic.
-- The motivation section explains background, gap, and motivation.
-- The method section explains pipeline, modules, formulas, and implementation.
-- The experiment section explains setup, baselines, metrics, and results.
-- Major visuals are precise crops, not full-page previews.
-- Crop manifests record bbox, margin, and verification status; visuals marked `needs_review` are not used until visually checked or recropped.
-- Figures and tables are integrated into the task, motivation, method, or experiment sections where they support the argument.
-- Formula section explains important equations and symbols.
-- Innovation section decomposes every contribution.
-- Limitations are distinguished from agent speculation.
-- Beginner notes define specialized terms.
-- Reproduction notes identify code/data/config requirements if available.
-
-## Weak Writing Patterns To Remove
-
-Replace these with concrete detail:
-
-- "The method improves performance."
-- "The authors propose a novel framework."
-- "The experiment proves effectiveness."
-- "This module extracts useful features."
-- "The results are significant."
-- "The figure shows the overall architecture."
-- "图中展示了整体框架。"
-- "该图说明了方法有效。"
-
-For every such sentence, add what, how, where, compared with what, and supported by which evidence.
-
-## Evidence Audit
-
-For each major claim, verify:
-
-- There is an evidence marker.
-- The evidence marker points to a real paper location.
-- The claim does not exceed what the evidence supports.
-- Inferences are labeled as inferences.
-
-## Completeness Table
-
-End the report with a table like:
-
-```markdown
-| Check Item | Status | Notes |
-|---|---|---|
-| Task section is detailed | Complete/Partial/Missing |  |
-| Motivation section is detailed | Complete/Partial/Missing |  |
-| Method section is module-level | Complete/Partial/Missing |  |
-| Experiments are fully analyzed | Complete/Partial/Missing |  |
-| Major figures/tables are explained | Complete/Partial/Missing |  |
-| Key formulas are explained | Complete/Partial/Missing |  |
-| Beginner terminology is covered | Complete/Partial/Missing |  |
-| Evidence markers are present | Complete/Partial/Missing |  |
-| Report language is consistent | Complete/Partial/Missing |  |
-| Figures are cropped and integrated into logic | Complete/Partial/Missing |  |
-```
-
-For Chinese reports, localize the completeness table:
-
-```markdown
-| 检查项 | 状态 | 说明 |
-|---|---|---|
-| 作者做了什么是否具体 | 完成/部分/缺失 |  |
-| 为什么做是否具体 | 完成/部分/缺失 |  |
-| 方法是否到模块级 | 完成/部分/缺失 |  |
-| 实验是否完整分析 | 完成/部分/缺失 |  |
-| 主要图表是否精确裁剪并融入正文 | 完成/部分/缺失 |  |
-| 关键公式是否解释 | 完成/部分/缺失 |  |
-| 初学者术语是否补充 | 完成/部分/缺失 |  |
-| 关键结论是否有证据标记 | 完成/部分/缺失 |  |
-| 结构语言是否一致 | 完成/部分/缺失 |  |
-```
+运行 `scripts/validate_report.py report.md` 检查结构及格式。脚本无法验证论文结论真伪或评估批评是否合理，仍需依据原文复核。

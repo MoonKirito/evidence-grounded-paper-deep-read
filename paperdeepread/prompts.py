@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from paperdeepread.providers.mimo import ChatMessage
+from paperdeepread.providers.base import ChatMessage
 from paperdeepread.utils import SKILL_DIR, read_text
 
 
@@ -55,10 +55,8 @@ def build_visual_inventory(extracted_dir: Path) -> str:
         )
     if not lines:
         return "figure_manifest 中没有可引用的精确图表路径。"
-    required_count = min(6, len(lines))
     return (
-        f"下面是 pdffigures2 抽取出的精确图表。报告必须至少嵌入 {required_count} 张/个相关图表，"
-        "优先覆盖方法结构图、核心结果表、消融表和关键可视化结果；不要使用整页 preview。\n"
+        "下面是 pdffigures2 提取的图表。How 去重后覆盖技术路线图；Experiment 按核心贡献证明链选择，最终执行全局选图计划。\n"
         + "\n".join(lines)
     )
 
@@ -76,17 +74,23 @@ def build_report_messages(
     paper_index = read_text(paper_index_path, limit=30000) if paper_index_path.exists() else "{}"
     figure_manifest = load_json_for_prompt(extracted_dir / "figure_manifest.json")
     visual_inventory = build_visual_inventory(extracted_dir)
-    skill_prompt = build_skill_prompt(max_chars=50000)
+    visual_analysis = load_json_for_prompt(extracted_dir / "visual_analysis.json")
+    if not json.loads(visual_analysis).get("complete"):
+        raise RuntimeError("Complete visual analysis is required before drafting the report.")
+    visual_plan = load_json_for_prompt(extracted_dir / "visual_plan.json")
+    if not json.loads(visual_plan).get("complete"):
+        raise RuntimeError("A complete global visual plan is required before drafting the report.")
+    skill_prompt = build_skill_prompt()
 
     system = (
         "你是一名严谨的论文精读助手，必须使用用户提供的 skill 规范生成 Markdown 报告。"
-        "报告正文语言必须保持一致；当报告语言为中文时，结构标题也必须是中文，不能使用 WHAT/WHY/HOW/EXPERIMENT 作为标题。"
+        "报告正文语言必须保持一致；使用 What/Why/How/Experiment/Question 五节叙述路线。"
         "不要编造论文中没有的信息；无法确认时明确说明证据不足。"
         "请直接输出最终 Markdown 报告，不要输出思考过程；内部推理尽量简短，把输出预算留给报告正文。"
     )
 
     user = f"""
-请根据下面材料生成一篇完整、细致、证据驱动的论文精读报告。
+请根据下面材料生成一篇证据驱动的五节论文精读报告，正文建议 2800–4200 中文字，How 建议 1200–2000 字，复杂方法可扩展。
 
 输出要求：
 - 输出格式只能是 Markdown。
@@ -95,21 +99,30 @@ def build_report_messages(
 - PDF 文件名：{pdf_name}
 - 需要把图和表融入“作者做了什么、为什么做、具体怎么做、如何验证”等对应正文段落，不要单独开“图表精读”章节。
 - 引用图片时使用 figure_manifest 中的相对路径，Markdown 写法必须是 `![Figure 1](extracted/figures/xxx.png)`。
-- 如果下面“Required Visual Inventory”列出了可用图表，报告正文必须实际插入这些相对路径对应的 Markdown 图片；不能只在文字中提到图号。
-- 不要引用 `page-001-preview.png` 这类整页预览图，除非明确标记为未解决的抽图限制。
+- 执行全局选图计划，所有 include=true 图表必须在指定章节展示讲解，不能再次以简洁为由删除；include=false 图表不插入。
+- How 去重后尽量展示全部技术路线图，结合总览和局部机制，详细说明各模块的输入、内部操作、输出、设计理由与衔接；图前说明阅读重点，图后解释关键技术。
+- Experiment 按核心贡献组织证明链，自主选择和讲解实验图表，不凑数量。
+- 不能引用整页预览，也不能自行截图或裁剪。提取遗漏时明确说明证据限制。
+- 行内公式使用 $...$，行间公式使用独占行的 $$ 包裹。
 - 对每个关键创新点都要解释作者思路、具体做法、相关公式或技术细节、证据位置。
 - 对公式、术语和实验指标要面向初学者解释。
 - 每个重要结论都要给出 evidence marker，例如 `(Evidence: Sec. 3, Fig. 2)`。
 
 {skill_prompt}
 
-# Required Visual Inventory
+# Candidate Visual Inventory
 {visual_inventory}
 
 # Paper Index
 ```json
 {paper_index}
 ```
+
+# All Visual Analyses
+{visual_analysis}
+
+# Global Visual Plan
+{visual_plan}
 
 # Figure And Table Manifest
 ```json

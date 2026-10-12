@@ -12,7 +12,7 @@ from pathlib import Path
 
 def slugify(value: str) -> str:
     value = value.lower()
-    value = re.sub(r"[^a-z0-9]+", "-", value)
+    value = re.sub(r"[^\w]+", "-", value, flags=re.UNICODE).replace("_", "-")
     value = value.strip("-")
     return value or "paper"
 
@@ -49,10 +49,8 @@ def main() -> int:
     report = report.replace("{{PDF_FILE}}", source_pdf.name)
     report = report.replace("{{LANGUAGE}}", args.language)
     (out_dir / "report.md").write_text(report, encoding="utf-8")
-    (out_dir / "evidence_cards.md").write_text("# Evidence Cards\n\n", encoding="utf-8")
 
     print(f"Wrote {out_dir / 'report.md'}")
-    print(f"Wrote {out_dir / 'evidence_cards.md'}")
     print(f"Workspace: {out_dir}")
     return 0
 

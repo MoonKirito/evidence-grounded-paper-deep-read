@@ -1,100 +1,37 @@
-﻿# Report Schema
+# Report Schema
 
-Use this schema for the final Markdown report. Keep the user's requested language for all structural text. For Chinese reports, do not use English headings such as `WHAT`, `WHY`, `HOW`, `EXPERIMENT`, `Paper Metadata`, or `Figure And Table Deep Reading`.
+正文只有以下五个二级章节，顺序固定。中文采用下列标题；其他语言保留 What/Why/How/Experiment/Question 和序号并翻译说明。论文标题后可加一行作者/年份/来源信息，无法确认时省略，勿添加冗长元数据表。
 
 ```markdown
 # 论文精读报告：<title>
 
-## 0. 一句话总览
+## 1. What：做了什么
 
-## 1. 论文基本信息
+## 2. Why：为什么做
 
-| 项目 | 内容 |
-|---|---|
-| 标题 |  |
-| 作者 |  |
-| 发表信息 |  |
-| PDF 文件 |  |
-| 主题 |  |
-| 报告语言 |  |
+## 3. How：如何实现
 
-## 2. 作者做了什么
-### 2.1 核心任务
-### 2.2 主要贡献
-### 2.3 相比已有工作的不同
+## 4. Experiment：如何证明有效
 
-## 3. 作者为什么要做这件事
-### 3.1 背景问题
-### 3.2 现有方法的不足
-### 3.3 作者的动机
-### 3.4 这个问题为什么重要
-
-## 4. 作者具体怎么做
-### 4.1 方法总览
-### 4.2 流程逐步拆解
-### 4.3 模块级细读
-### 4.4 训练、优化或参数设置
-### 4.5 推理或使用流程
-### 4.6 实现细节
-
-## 5. 作者如何验证
-### 5.1 实验要回答的问题
-### 5.2 数据集
-### 5.3 评价指标
-### 5.4 对比方法
-### 5.5 主要结果
-### 5.6 消融实验
-### 5.7 额外分析
-### 5.8 实验证明了什么
-### 5.9 实验没有证明什么
-
-## 6. 公式与关键技术细节
-
-## 7. 创新点逐条拆解
-
-## 8. 局限性与开放问题
-
-## 9. 初学者背景补充
-
-## 10. 复现与进一步阅读建议
-
-## 11. 完整性自检
+## 5. Question：评价与疑问
 ```
 
-## Detail Requirements
+## 内容分工
 
-Avoid short generic paragraphs in sections 2-7. Use subsections liberally when the paper has multiple modules, experiments, or claims.
+What：用具体任务、输入输出、关键做法和贡献概括作者做了什么。贡献不能仅写“提出新框架”或“提升性能”。
 
-Do not create a standalone figure/table section. Embed cropped figures and tables directly into the relevant subsection about the task, motivation, method, or experiment, and explain them as part of the argument.
+Why：说明作者针对哪些既有方法、哪些条件下的不足；把作者的观察或启发与解决思路连接起来。论文未说明启发时不能虚构。
 
-Use tables only when they improve clarity. For method explanations, prefer prose plus numbered steps.
+How：沿输入→表征构造→关键模块→训练/优化→推理输出详细展开技术路线。每个核心模块说明输入输出、内部操作、关键公式、设计理由及与前后模块的关系；区分训练和推理。技术路线图按全局计划去重后尽量全部展示讲解，总览图与局部机制图通常互补。图前给阅读重点，图后沿模块、箭头或坐标解释操作与设计意图。必要超参数用于解释机制，避免只列模块名称或把推理过程压成一句话。
 
-Every method module should include:
+Experiment：根据 Why 中的目的挑选实验，串起“主张→实验设计→关键结果→支持程度与边界”。说明必要的数据集、最强相关基线、指标方向和实际数值。注明比较条件；区分百分点与相对提升，显著性未报告时不得称统计显著。只挑能帮助论证的主结果、消融、泛化或成本分析，不遍历所有实验。每条实验证明链优先采用代表性图表，辅助诊断和明细通常文字引用；不同信息视角不自动等于独立核心贡献。
 
-- Purpose.
-- Input.
-- Output.
-- Internal procedure.
-- Related formula or cropped figure/table.
-- Design rationale.
-- Evidence location.
+Question：给出有依据的独立评价。讨论影响主张的假设、遗漏、公平性、泛化或成本，区分作者自述局限与自己的疑问，提出有针对性的可验证改进，不机械套用“缺少更多数据”等泛化批评。
 
-Every experiment should include:
+## 长度与证据
 
-- Hypothesis.
-- Setup.
-- Result.
-- Interpretation.
-- Evidence location.
+中文正文建议 2800–4200 字，How 建议 1200–2000 字（参考范围，不是强制截断，复杂方法可扩展）。How 和 Experiment 占主要篇幅，精简的是重复内容，不能为达成字数省略核心机制或独立方法图。少量三级标题或步骤列表可以帮助阅读；不固定每模块填写多字段表。
 
-## Evidence Markers
+关键事实与数字用 `(Evidence: Sec. 3.2, Fig. 2)`、`(Evidence: p. 7, Table 1)` 或段落 ID 定位。独立判断用“我的判断”或 `(Inference from Sec. 4.1 and Table 3)`，注明推断的边界。
 
-Use compact evidence markers inside prose:
-
-```markdown
-(Evidence: Sec. 3.2, Fig. 2)
-(Evidence: p. 7, Table 1)
-(Inference from Sec. 4.1 and Table 3)
-```
-
-If page or section information is unavailable, cite the nearest reliable anchor, such as figure number, table number, equation number, or extracted paragraph number.
+所有公式使用 `$...$` 或独占行的 `$$`。执行 visual_plan.json：方法图去重后尽量全展示，实验图按核心贡献证明链选取。只放已分析且在计划中选定的 pdffigures2 图片，写法为 `![图 2：方法流程](extracted/figures/source-Figure2-1.png)`。不要单独建立图表或自检章节。

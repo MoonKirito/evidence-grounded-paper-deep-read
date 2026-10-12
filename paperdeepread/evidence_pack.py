@@ -48,7 +48,7 @@ def iter_paragraphs(sections: dict[str, Any]) -> list[ParagraphCandidate]:
 def estimate_char_budget(max_input_chars: int, figure_count: int) -> int:
     figure_penalty = min(max(figure_count, 0) * 700, 24000)
     budget = int(max_input_chars * 0.55) - figure_penalty
-    return max(24000, min(48000, budget))
+    return min(max_input_chars, max(24000, min(48000, budget)))
 
 
 def build_stage_text_pack(
@@ -59,6 +59,11 @@ def build_stage_text_pack(
     budget_chars: int,
 ) -> str:
     candidates = iter_paragraphs(sections)
+    if budget_chars <= 0:
+        return ""
+    all_blocks = [f"[Page {c.page}, {c.paragraph_id}] {c.text}" for c in candidates]
+    if len("\n\n".join(all_blocks)) <= budget_chars:
+        return "\n\n".join(all_blocks)
     selected: list[ParagraphCandidate] = []
     selected_orders: set[int] = set()
 
@@ -88,13 +93,30 @@ def build_stage_text_pack(
 
     lines: list[str] = []
     used = 0
-    for item in sorted(selected, key=lambda item: item.order):
+    # Allocate by relevance, then restore reading order. Sorting before allocation
+    # would let early low-score paragraphs crowd out later method/results evidence.
+    chosen: list[ParagraphCandidate] = []
+    for item in selected:
         block = f"[Page {item.page}, {item.paragraph_id}] {item.text}"
-        if used and used + len(block) + 2 > budget_chars:
+        cost = len(block) + (2 if chosen else 0)
+        if used + cost > budget_chars:
             continue
-        lines.append(block)
-        used += len(block) + 2
+        chosen.append(item)
+        used += cost
         if used >= budget_chars:
             break
+
+    # Nearby paragraphs often contain equations or definitions without keywords.
+    chosen_orders = {item.order for item in chosen}
+    neighbors = {order + delta for order in chosen_orders for delta in (-1, 1)}
+    for item in candidates:
+        if item.order in chosen_orders or item.order not in neighbors:
+            continue
+        cost = len(f"[Page {item.page}, {item.paragraph_id}] {item.text}") + 2
+        if used + cost <= budget_chars:
+            chosen.append(item)
+            used += cost
+    for item in sorted(chosen, key=lambda item: item.order):
+        lines.append(f"[Page {item.page}, {item.paragraph_id}] {item.text}")
 
     return "\n\n".join(lines)

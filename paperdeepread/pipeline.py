@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 try:
@@ -14,9 +15,13 @@ except ImportError:  # pragma: no cover
 
 from paperdeepread.config import AppConfig
 from paperdeepread.prompts import build_report_messages
-from paperdeepread.providers.mimo import MimoClient
+from paperdeepread.providers import create_client
+from paperdeepread.providers.base import ModelClient
 from paperdeepread.sectioned import REPORT_STAGES, assemble_sectioned_report, build_stage_messages
+from paperdeepread.sectioned import strip_markdown_fence
 from paperdeepread.utils import REPO_ROOT, SKILL_DIR, require_success, run_python_script, slugify
+from paperdeepread.visuals import analyze_visuals
+from paperdeepread.visual_plan import build_visual_plan
 
 
 @dataclass(frozen=True)
@@ -57,6 +62,12 @@ def run_pdffigures2(pdf: Path, work_dir: Path, jar_path: Path, java_path: str) -
     input_dir.mkdir(parents=True, exist_ok=True)
     figures_dir.mkdir(parents=True, exist_ok=True)
     data_dir.mkdir(parents=True, exist_ok=True)
+    # These dedicated folders contain only generated extraction artifacts.
+    # Otherwise an earlier extraction can silently contaminate the new manifest.
+    for artifact_dir in (data_dir, figures_dir):
+        for artifact in artifact_dir.iterdir():
+            if artifact.is_file():
+                artifact.unlink()
 
     pdffig_pdf = input_dir / f"{slugify(pdf.stem)}.pdf"
     if pdf.resolve() != pdffig_pdf.resolve():
@@ -130,24 +141,31 @@ def prepare_workspace(pdf: Path, output_dir: Path, language: str) -> Path:
         shutil.copy2(pdf, source_pdf)
 
     report_path = work_dir / "report.md"
-    evidence_path = work_dir / "evidence_cards.md"
     if not report_path.exists() or "TODO" in report_path.read_text(encoding="utf-8", errors="replace"):
         scaffold = run_python_script(
             SKILL_DIR / "scripts" / "make_report_scaffold.py",
             [str(pdf), "--title", pdf.stem, "--language", language, "--out-root", str(output_dir)],
         )
         require_success(scaffold, "workspace scaffold")
-    if not evidence_path.exists():
-        evidence_path.write_text("# Evidence Cards\n\n", encoding="utf-8")
     return work_dir
 
 
-def process_pdf(pdf: Path, options: RunOptions, client: MimoClient) -> Path:
+def process_pdf(pdf: Path, options: RunOptions, client: ModelClient) -> Path:
     work_dir = prepare_workspace(pdf, options.output_dir, options.config.pipeline.language)
     report_path = work_dir / "report.md"
-    if options.config.pipeline.skip_existing and report_path.exists() and "TODO" not in report_path.read_text(encoding="utf-8", errors="replace"):
+    fingerprint = generation_fingerprint(pdf, options)
+    state_path = work_dir / "generation_state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
+    cache_matches = state.get("fingerprint") == fingerprint
+    if (options.config.pipeline.skip_existing and cache_matches and state.get("complete")
+            and report_path.exists() and state.get("report_sha256") == hashlib.sha256(report_path.read_bytes()).hexdigest()):
         stage(f"[skip] {pdf.name}: existing report")
         return report_path
+
+    if not cache_matches:
+        for cached in (work_dir / "stages").glob("*.md"):
+            cached.unlink()
+    state_path.write_text(json.dumps({"fingerprint": fingerprint, "complete": False}), encoding="utf-8")
 
     source_pdf = work_dir / "source.pdf"
     extracted_dir = work_dir / "extracted"
@@ -164,11 +182,7 @@ def process_pdf(pdf: Path, options: RunOptions, client: MimoClient) -> Path:
         stage(f"[figures] {pdf.name}")
         run_pdffigures2(source_pdf, work_dir, jar_path, options.java_path or options.config.pdffigures2.java_path)
     else:
-        stage(f"[figures skipped] {pdf.name}: no pdffigures2 jar configured")
-        (extracted_dir / "figure_manifest.json").write_text(
-            json.dumps({"source": "none", "items": []}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        raise RuntimeError("pdffigures2 jar is required; configure jar_path or pass --pdffigures2-jar.")
 
     paper_index = work_dir / "paper_index.json"
     stage(f"[index] {pdf.name}")
@@ -177,6 +191,12 @@ def process_pdf(pdf: Path, options: RunOptions, client: MimoClient) -> Path:
         ["--extracted", str(extracted_dir), "--out", str(paper_index)],
     )
     require_success(index_result, "paper index build")
+
+    stage(f"[visual analysis] {pdf.name}: inspect all extracted figures/tables before writing")
+    vision_client = create_client(options.config.vision) if options.config.vision else client
+    analyze_visuals(extracted_dir, vision_client, options.config.pipeline.language, on_progress=stage)
+    stage(f"[visual plan] {pdf.name}: method deduplication and core-claim coverage")
+    build_visual_plan(extracted_dir, client, options.config.pipeline.language)
 
     stage(f"[llm] {pdf.name}")
     if options.config.pipeline.generation_mode == "sectioned":
@@ -198,7 +218,7 @@ def process_pdf(pdf: Path, options: RunOptions, client: MimoClient) -> Path:
             language=options.config.pipeline.language,
             max_input_chars=options.config.pipeline.max_input_chars,
         )
-        report = client.complete(messages)
+        report = strip_markdown_fence(client.complete(messages)) + "\n"
     else:
         raise RuntimeError(f"Unsupported generation_mode: {options.config.pipeline.generation_mode}")
     report_path.write_text(report, encoding="utf-8")
@@ -211,13 +231,36 @@ def process_pdf(pdf: Path, options: RunOptions, client: MimoClient) -> Path:
         )
         if validate.returncode != 0:
             (work_dir / "validation.log").write_text(validate.stdout, encoding="utf-8")
-            stage(f"[validation warning] {pdf.name}: see {work_dir / 'validation.log'}")
+            # Preserve report/log for inspection, but don't endlessly reuse bad
+            # stage prose on the next run. Successful visual analyses stay cached.
+            for cached in (work_dir / "stages").glob("*.md"):
+                cached.unlink()
+            raise RuntimeError(f"Report validation failed for {pdf.name}; see {work_dir / 'validation.log'}")
         else:
             validation_log = work_dir / "validation.log"
             if validation_log.exists():
                 validation_log.unlink()
 
+    state_path.write_text(json.dumps({"fingerprint": fingerprint, "complete": True,
+                                     "report_sha256": hashlib.sha256(report_path.read_bytes()).hexdigest()}), encoding="utf-8")
     return report_path
+
+
+def generation_fingerprint(pdf: Path, options: RunOptions) -> str:
+    """Invalidate old reports/stages when source, instructions or configuration change."""
+    digest = hashlib.sha256(pdf.read_bytes())
+    digest.update(repr(options.config).encode("utf-8"))
+    digest.update(str(options.pdffigures2_jar).encode("utf-8"))
+    if options.pdffigures2_jar and options.pdffigures2_jar.is_file():
+        stat = options.pdffigures2_jar.stat()
+        digest.update(f"{stat.st_size}:{stat.st_mtime_ns}".encode("utf-8"))
+    digest.update(str(options.java_path).encode("utf-8"))
+    for label, root in (("code", Path(__file__).resolve().parent), ("skill", SKILL_DIR)):
+        for path in sorted(root.rglob("*")):
+            if path.is_file() and path.suffix in {".py", ".md", ".yaml"}:
+                digest.update(f"{label}/{path.relative_to(root).as_posix()}".encode("utf-8"))
+                digest.update(path.read_bytes())
+    return digest.hexdigest()
 
 
 def generate_sectioned_report(
@@ -228,10 +271,19 @@ def generate_sectioned_report(
     extracted_dir: Path,
     paper_index: Path,
     options: RunOptions,
-    client: MimoClient,
+    client: ModelClient,
 ) -> str:
     stages_dir = work_dir / "stages"
     stages_dir.mkdir(parents=True, exist_ok=True)
+    context_hash = hashlib.sha256()
+    for path in (extracted_dir / "sections.json", extracted_dir / "visual_analysis.json", extracted_dir / "visual_plan.json", paper_index):
+        context_hash.update(path.read_bytes())
+    context_path = stages_dir / "context.sha256"
+    current_context = context_hash.hexdigest()
+    if not context_path.exists() or context_path.read_text(encoding="utf-8") != current_context:
+        for cached in stages_dir.glob("*.md"):
+            cached.unlink()
+    context_path.write_text(current_context, encoding="utf-8")
     generated: dict[str, str] = {}
 
     for report_stage in REPORT_STAGES:
@@ -260,23 +312,27 @@ def generate_sectioned_report(
 
 
 def run_pipeline(options: RunOptions) -> list[Path]:
+    options = replace(options, input_dir=options.input_dir.resolve(), output_dir=options.output_dir.resolve(),
+                      pdffigures2_jar=options.pdffigures2_jar.resolve() if options.pdffigures2_jar else None)
     pdfs = discover_pdfs(options.input_dir, options.limit)
     if not pdfs:
         raise RuntimeError(f"No PDF files found in {options.input_dir}")
 
-    if options.config.llm.provider != "mimo":
-        raise RuntimeError(f"Unsupported provider: {options.config.llm.provider}")
-    if not options.config.llm.api_key:
-        raise RuntimeError(
-            f"Missing MiMo API key. Set environment variable {options.config.llm.api_key_env}."
-        )
+    for llm_config in (options.config.llm, options.config.vision):
+        if llm_config and llm_config.require_api_key and not llm_config.api_key:
+            raise RuntimeError(f"Missing {llm_config.provider} API key. Set environment variable {llm_config.api_key_env} or configure api_key.")
 
     jar_path = options.pdffigures2_jar
+    if jar_path is None:
+        raise RuntimeError("pdffigures2 jar is required; configure jar_path or pass --pdffigures2-jar.")
     if jar_path and not jar_path.exists():
         raise FileNotFoundError(f"pdffigures2 jar not found: {jar_path}")
 
     options.output_dir.mkdir(parents=True, exist_ok=True)
-    client = MimoClient(options.config.llm)
+    slugs = [slugify(pdf.stem).casefold() for pdf in pdfs]
+    if len(slugs) != len(set(slugs)):
+        raise RuntimeError("PDF filenames map to the same report directory; rename conflicting PDFs first.")
+    client = create_client(options.config.llm)
     reports = []
     for pdf in progress(pdfs):
         reports.append(process_pdf(pdf, options, client))

@@ -1,7 +1,0 @@
-pymupdf>=1.24
-pdfplumber>=0.11
-pypdf>=6.0
-pypdfium2>=4.30
-pillow>=10.0
-tqdm>=4.66
-tomli>=2.0; python_version < "3.11"

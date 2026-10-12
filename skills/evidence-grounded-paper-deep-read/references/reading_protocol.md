@@ -1,86 +1,23 @@
 # Reading Protocol
 
-Use this protocol before drafting any report.
+先理解完整论文，再选择材料组织简洁报告；分析范围不等于报告篇幅。
 
-## 1. Build The Paper Map
+## 预读
 
-Identify:
+识别任务、作者主张、方法输入输出、关键假设、相关工作不足、核心机制、公式、实验条件、结论及局限。核对章节候选与页码，不能将自动索引当成已经验证的论文事实。
 
-- Title, authors, venue/year if available.
-- Abstract claim.
-- Problem setting.
-- Main contributions as stated by the authors.
-- Method sections and module names.
-- Algorithms, formulas, losses, objectives, or prompts.
-- Figures and tables with captions.
-- Datasets, metrics, baselines, ablations, and implementation details.
-- Limitations, failure cases, and future work.
+先完成 `figure_manifest.json` 中所有图表的分析；检查正文和图注的图表引用是否有遗漏，包括附录图表。无法提取的项目保留缺失记录与图注/正文分析，不自行裁剪。细则见 `figure_analysis_protocol.md`。
 
-## 2. Create Evidence Cards
+## 建立论证链
 
-Create one evidence card for every important item. Use this format:
+围绕每个核心贡献记录“改进目标→既有不足→设计选择→对应实验→结论边界”的证据锚点。可保存在工作笔记中，不将笔记或自检表全部搬入报告。
 
-```markdown
-### Evidence Card: <short name>
+方法按实际执行顺序阅读，注意训练与推理的区别。上下段落中的定义、假设及公式应与模块一起核实，不能只检索带 method/loss 等关键词的句子。
 
-- Type: contribution | motivation | method | formula | figure | experiment | limitation
-- Location: section/page/paragraph/figure/table/equation
-- Paper text summary:
-- Concrete details:
-- Why it matters:
-- Related report sections:
-- Confidence: high | medium | low
-```
+实验先判断它验证哪一项主张，再检查数据划分、基线配置、指标方向、提升幅度和是否报告不确定性。只挑对作者目的有解释价值的实验写入正文；没有出现某类实验不一定是缺陷，需要结合主张判断。
 
-Do not merge unrelated claims into one card.
+## 撰写与复核
 
-## 3. Analyze Contributions
+先形成全局 visual_plan.json，记录方法图去重代表与核心贡献的图表/文字呈现理由，再按五节路线写作，What 陈述贡献，Why 解释动机，How 展开技术，Experiment 建立证明链，Question 给出评价。术语和公式就地简释。
 
-For each contribution, answer:
-
-- What exact gap or problem is addressed?
-- What is the author's insight?
-- What existing approach is insufficient?
-- What mechanism is introduced?
-- What inputs and outputs does it operate on?
-- What formula, module, training objective, data construction, or inference procedure implements it?
-- What evidence validates it?
-
-## 4. Analyze The Method Pipeline
-
-Explain the method as an ordered pipeline:
-
-1. Input and assumptions.
-2. Preprocessing or representation.
-3. Core modules.
-4. Training objective or optimization.
-5. Inference or deployment procedure.
-6. Outputs.
-
-For each step, describe what enters, what happens, what leaves, and why the step exists.
-
-## 5. Analyze Experiments
-
-Separate experiments by purpose:
-
-- Main comparison: Does the proposed method beat baselines?
-- Ablation: Which component matters?
-- Sensitivity: How robust is the method to hyperparameters or conditions?
-- Efficiency: What is the cost?
-- Qualitative analysis: What examples explain behavior?
-- Failure analysis: Where does it break?
-
-If the paper omits one of these categories, say so.
-
-## 6. Beginner Reconstruction Test
-
-Before drafting, check whether a beginner could answer:
-
-- What problem is being solved?
-- Why previous methods are not enough?
-- What each proposed module does?
-- How the key formula should be read?
-- What every major figure/table contributes?
-- Why each experiment was included?
-
-If not, gather more evidence before writing.
+复核每项关键结论是否超过证据，每张插图是否必要，每个疑问是否有具体依据；把重复背景、同一贡献的多次展开和无关实现细节删除。

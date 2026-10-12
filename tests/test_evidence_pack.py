@@ -53,6 +53,26 @@ class EvidencePackTests(unittest.TestCase):
         self.assertGreaterEqual(large, 24000)
         self.assertLessEqual(small, 48000)
 
+    def test_late_high_score_evidence_wins_over_early_low_score(self):
+        sections = {"pages": [{"page": 1, "paragraphs": [
+            {"id": "EARLY", "text": "method " + "x" * 45},
+            {"id": "LATE", "text": "method loss training network"}]}]}
+        packed = build_stage_text_pack(sections=sections, stage_keywords=["method", "loss", "training", "network"], always_keywords=[], budget_chars=70)
+        self.assertIn("LATE", packed)
+        self.assertNotIn("EARLY", packed)
+        self.assertLessEqual(len(packed), 70)
+
+    def test_oversized_paragraph_never_exceeds_budget(self):
+        sections = {"pages": [{"page": 1, "paragraphs": [{"text": "abstract " + "x" * 200}]}]}
+        packed = build_stage_text_pack(sections=sections, stage_keywords=[], always_keywords=["abstract"], budget_chars=30)
+        self.assertLessEqual(len(packed), 30)
+        self.assertLessEqual(estimate_char_budget(1000, 20), 1000)
+
+    def test_small_paper_keeps_non_keyword_definitions(self):
+        sections = {"pages": [{"page": 1, "paragraphs": [{"text": "Let z denote the latent state."}]}]}
+        packed = build_stage_text_pack(sections=sections, stage_keywords=["method"], always_keywords=[], budget_chars=1000)
+        self.assertIn("latent state", packed)
+
 
 if __name__ == "__main__":
     unittest.main()

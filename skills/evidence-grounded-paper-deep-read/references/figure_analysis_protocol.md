@@ -1,105 +1,38 @@
 # Figure And Table Analysis Protocol
 
-Use this protocol for every major figure and table. The final report must integrate visuals into the task, motivation, method, or experiment logic; do not create a separate figure-reading section.
+## 提取与覆盖
 
-## Cropping Requirement
+必须先用 pdffigures2 提取全部图表及元数据。保留 figType、name、caption、page、image、regionBoundary 等字段。pdffigures2 的 page 从 0 开始，正文引用应转换成从 1 开始的 PDF 页码。
 
-Use the best available figure asset in this order:
+核对提取清单、正文图表引用与附录。正文引用只能提供“可能遗漏”的线索，未人工核实不能宣称全量提取已成功。图像缺失或不可读时明确限制；不使用 embedded-image 提取、页面预览、其他裁剪工具或自行截图来替代 pdffigures2。
 
-1. Publisher/source assets if provided separately by the user.
-2. Complete embedded figure image extracted directly from the PDF.
-3. A precise rendered crop from the PDF page.
-4. A marked unresolved extraction limitation.
+## 全量预读（在正文写作之前）
 
-Full-page previews are only for inspection and bbox selection.
+对每一张图/表，结合图片、完整图注、附近定义及正文引用回答：
 
-## Direct Extraction Requirement
+- 它是什么：任务示意、方法框架、模块、结果、消融、曲线或案例？
+- 怎么读：模块及箭头含义、坐标轴/图例、行列/指标方向、符号和比较条件？
+- 观察到了什么：关键关系、对比或数值；看不清的内容明确标注，不猜测。
+- 支持什么主张：与作者目标和贡献的连接，有真实证据位置。
+- 不能证明什么：混杂因素、适用范围、不确定性或缺少的对照。
+- 是否值得插入：推荐章节及理由，或为何省略；候选选择不等于全部强制插入。
 
-Before cropping, inspect `figure_manifest.json` for `embedded_image` or `embedded_image_pypdf` items. These are PDF image objects extracted directly from the file. Prefer them only when visual inspection shows the object is the complete figure/table needed in the report.
+将结果保存到 `extracted/visual_analysis.json`。可用图表应有 summary、observation、supports、limitation、evidence、readable、selected、section、reason；不可读图片标记 status=unreadable，提取失败项目标记 status=unavailable 并保存原因。这些图片不能用于报告插图。CLI 会向模型发送实际图像，接口必须支持多模态，不能静默降级成只看图注。
 
-Do not assume every embedded image object is a complete figure. In many papers, a figure is assembled from:
+## 全局选图与去重（预读后、写作前）
 
-- multiple bitmap panels,
-- vector lines and shapes,
-- selectable text labels,
-- overlaid annotations,
-- logos or decorative images.
+保存 `extracted/visual_plan.json`，一次性比较全部预读记录，不让每个正文阶段孤立选图。
 
-If the extracted object is only a subpanel, background bitmap, or missing labels, use rendered cropping instead.
+**How：** 收集技术路线、整体架构、关键模块、训练/推理流程和机制图，去重后尽量全部展示讲解。总览图与局部机制图通常互补，不能因为属于同一模块就删掉一张。只有另一张保留图完整覆盖该图信息时才标记 `duplicate_of`，注明代表图和具体重合内容；附录中的独立方法图也需要考虑。不可读/漏提取时记录限制，不能用文字替代看图后假称完整覆盖。
 
-Recommended workflow:
+**Experiment：** 按作者目标与核心贡献建立“主张→设置→图表证据→解释与边界”，自主选图。准确率、迁移、样本效率等独立收益分别检查，不将多个独立证明链笼统以“简洁”为由全部改为文字。每条实验证明链优先选择一张最有解释力的代表图表；同一证明链追加图表时，说明新增信息为何对判断核心结论不可缺少，不能仅以“不同视角/粒度”作为理由。训练诊断、层选择、采样敏感性、逐受试者明细和探索分析的补充视角通常文字引用，若关系到关键质疑或核心结论再展示。不同的冻结/微调设置可以形成不同证明链。图表仅提供重复数值或次要设置时可只引用文字，但说明具体理由。
 
-1. Render or inspect the page containing the visual.
-2. Determine the bounding box around the figure/table, including all subpanels, legends, axes, labels, and internal annotations, while excluding unrelated page text when possible.
-3. Run `scripts/crop_pdf_region_verified.py` with the page number, bbox, and a margin.
-4. Inspect the generated manifest. If `verification.status` is `needs_review`, enlarge or shift the bbox and crop again.
-5. Reference only the verified cropped image in the report using a relative path.
-6. If exact cropping is impossible, mark the visual as unavailable or unresolved; do not present a full-page preview as if it were the figure.
+计划逐项记录 id（figType + 空格 + name）、image、section、include、covers、reason、duplicate_of。相同技术信息使用相同 covers 名称，被去重图 covers 必须包含在保留代表的 covers 中。另以 claims 记录各核心贡献、真实证据锚点、关联图表、image/text 呈现决定与理由。计划留在工作文件，不追加到报告正文。
 
-Use file names such as:
+## 执行与复核
 
-```text
-figure-001-overall-framework.png
-table-002-main-results.png
-```
+所有 include=true 图表必须在计划指定章节展示并讲解，写作阶段不能再次无记录地删除。include=false 图表不插入；发现计划不合理时先更新计划，再改正文。图表数不固定，关键是方法信息与贡献证据覆盖。
 
-## Integration Guidance
+How 沿实际技术路线放图：先总览，再关键局部机制，最后训练/推理输出。图前交代阅读重点，图后结合模块、箭头、符号说明操作与设计理由，不能只有标题或“如图所示”。实验图解释关键比较、趋势及不确定性，不逐单元格复述整张表。
 
-Place visuals where the reader needs them:
-
-- Problem/task figures belong in the section explaining what the authors did.
-- Motivation or gap diagrams belong in the section explaining why the authors did it.
-- Architecture, algorithm, module, pipeline, and formula diagrams belong in the method section.
-- Result tables, ablation tables, qualitative examples, and metric curves belong in the experiment section.
-
-Introduce each visual with a sentence explaining why it appears there. After the image, continue the surrounding explanation. The report should read like one coherent analysis, not like a gallery.
-
-## Figure Checklist
-
-For each figure:
-
-- Identify the figure number, caption, and page.
-- Embed the cropped image if available.
-- State which section of the paper it supports.
-- Explain the visual structure from left to right or top to bottom.
-- Explain arrows, colors, modules, axes, legends, and labels.
-- Connect each visual component to the method or experiment text.
-- State the main claim the figure supports.
-- State what the figure does not prove.
-- Add beginner notes for specialized notation.
-
-## Table Checklist
-
-For each table:
-
-- Identify the table number, caption, and page.
-- Explain rows, columns, metrics, and symbols.
-- Identify the best result and whether higher/lower is better.
-- Compare the proposed method with the strongest baseline.
-- Explain whether improvements are large, small, consistent, or mixed.
-- Check whether statistical significance is reported.
-- Note missing settings, datasets, or unclear details.
-
-## Captions And Nearby Text
-
-Do not explain a figure from the image alone. Use:
-
-- Caption.
-- Paragraph before the figure.
-- Paragraph after the figure.
-- Section heading.
-- Any later text that references the figure.
-
-When captions and body text disagree, report the discrepancy.
-
-## Extraction Failures
-
-If an embedded figure cannot be extracted:
-
-- Render the page as a page preview image.
-- Use the page preview only to choose a crop region.
-- Crop the visual with `scripts/crop_pdf_region.py`.
-- If cropping still fails, mark the figure as `unresolved extraction limitation`.
-- Explain any visibility limitations.
-
-If no image can be produced, still include a text-only explanation from caption and body evidence.
+只使用 pdffigures2 manifest 的相对 image 路径。运行验证器检查全局计划有效性、方法图去重代表、已选图的章节覆盖与未计划插图；再由阅读者核对讲解是否充分、去重是否真的保留了独特信息。

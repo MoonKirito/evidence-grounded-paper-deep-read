@@ -1,8 +1,11 @@
 # Evidence-Grounded Paper Deep Read CLI config example
 
 [llm]
+# List presets: python -m paperdeepread list-providers
+# Setup and per-provider examples: docs/providers.md
 provider = "mimo"
 base_url = "https://token-plan-cn.xiaomimimo.com/v1"
+# Choose a vision-capable model here or configure [vision] below
 model = "mimo-v2.5-pro"
 api_key_env = "MIMO_API_KEY"
 temperature = 0.2
@@ -18,6 +21,14 @@ validate_report = true
 skip_existing = false
 
 [pdffigures2]
+# Required: extraction never falls back to manual crops
 jar_path = ""
 java_path = "java"
 
+
+# Optional independent vision model (otherwise reuses [llm]):
+# [vision]
+# provider = "qwen"
+# model = "YOUR_VISION_MODEL_ID"
+# max_tokens = 4096
+# api_key_env = "DASHSCOPE_API_KEY"
